@@ -26,10 +26,10 @@
 #ifndef _PLAYERPREF_H_
 #define _PLAYERPREF_H_
 
-#define HM_DRV_FILE  		"/home/z3r0/.torcs/drivers/human/human.xml"
+#define HM_DRV_FILE  		"/home/dragon/.torcs/drivers/human/human.xml"
 // dossman edit because Torcs couldn't autopmatically find the file
 // #define HM_PREF_FILE		"drivers/human/preferences.xml"
-#define HM_PREF_FILE		"/home/z3r0/.torcs/drivers/human/preferences.xml"
+#define HM_PREF_FILE		"/home/dragon/.torcs/drivers/human/preferences.xml"
 
 #define	HM_SECT_JSPREF		"joystick"
 #define	HM_SECT_MOUSEPREF	"mouse"

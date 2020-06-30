@@ -30,6 +30,7 @@ version     : $Id: racestate.cpp,v 1.5 2005/08/17 20:48:39 berniw Exp $
 #include <tgfclient.h>
 #include <raceman.h>
 #include <racescreens.h>
+#include <cmath>
 
 #include "racemain.h"
 #include "raceinit.h"
@@ -71,10 +72,6 @@ char save_dir[196];
 char obs_file[256] = {};
 char acs_file[256] = {};
 char rews_file[256] = {};
-int rec_timestep =0;
-// TODO: eventually figure out why there is an empty episode during the data record and
-// remove the need for the MIN_STEP_RECORD
-const int __MIN__REC_TIMESTEP__=200;
 
 // Sensors holder variables ( no more init at each steps)
 tSituation *s = NULL;
@@ -173,15 +170,15 @@ void ReStateManage(void) {
 				if (getTextOnly()==false)
 					GfOut("RaceEngine: state = RE_STATE_PRE_RACE\n");
 
-				// if( getRecordHuman()) {
-				// 		if( getRecEpisodeLimit() > 0)
-				// 			printf( "\n### DEBUG: [Recording] Current episode: %d / %d\n", ep_counter,
-				// 		 		getRecEpisodeLimit());
-				// 		else
-				//
-				// 			printf( "### DEBUG: [Recording] Current episode: %d\n", ep_counter);
-				// 	// open_save_files();
-				// }
+				if( getRecordHuman()) {
+						if( getRecEpisodeLimit() > 0)
+							printf( "### DEBUG: [Recording] Current episode: %d / %d\n", ep_counter,
+						 		getRecEpisodeLimit());
+						else
+
+							printf( "### DEBUG: [Recording] Current episode: %d\n", ep_counter);
+					// open_save_files();
+				}
 
 				mode = RePreRace();
 				if (mode & RM_NEXT_STEP) {
@@ -222,8 +219,6 @@ void ReStateManage(void) {
 					}
 
 					oppSens = new ObstacleSensors(36, curTrack, car, s, 200.);
-
-					rec_timestep = 0;
 				}
 				// end special hook for recording
 				if (mode & RM_NEXT_STEP) {
@@ -234,14 +229,13 @@ void ReStateManage(void) {
 			case RE_STATE_RACE:
 				//				printf("RE_STATE_RACE\n");
 				mode = ReUpdate();
-				rec_timestep++;
 
-				// Data recording: do we append the observation etc... to the save file ?
-				if( getRecordHuman() && ( getRecTimestepLimit() > 0 && rec_timestep <= getRecTimestepLimit())) {
+				// dosssman
+				if( getRecordHuman()) {
 					// rs_timestep++;
 					append_step_data();
 				}
-
+				// end dosssman
 
 				// GfOut( mode);
 				if (ReInfo->s->_raceState == RM_RACE_ENDED) {
@@ -258,14 +252,17 @@ void ReStateManage(void) {
 				if (getTextOnly()==false)
 				GfOut("RaceEngine: state = RE_STATE_RACE_STOP\n");
 				/* Interrupted by player */
+				// dosssman
+				// TODO: Dump player data
 
-				if( getRecordHuman() && (getRecTimestepLimit() > 0 && rec_timestep > __MIN__REC_TIMESTEP__)) {
+				if( getRecordHuman()) {
 					// dump_play_data();
+					// Insert gotoline in the save file
 					append_episode_data();
+					// close_save_files();
 				}
 
 				mode = ReRaceStop();
-
 				if (mode & RM_NEXT_STEP) {
 					if (RESTART==1)
 					{
@@ -290,47 +287,53 @@ void ReStateManage(void) {
 				if (getTextOnly()==false)
 					GfOut("RaceEngine: state = RE_STATE_RACE_END\n");
 				// mode = ReRaceEnd();
-
+				// dosssman
 				// dumping data
 				if( getRecordHuman()) {
-					printf( "### DEBUG: Reached data appending");
+					// dump_play_data();
+					// Insert gotoline in the save file
+					printf( "##### DEBUG: Reached data appending");
 					append_episode_data();
+					// close_save_files();
 				}
 
 				ep_counter++;
 
 				if( getRecordHuman() && ( getRecEpisodeLimit() > 0 && ep_counter >= getRecEpisodeLimit())) {
 					printf( "### DEBUG: Episode limit reached, shutting down the game !\n" );
+					ReInfo->s->_raceState = RM_RACE_ENDED;
 					ReInfo->_reState=RE_STATE_EXIT;
-
+					// mode = ReRaceEnd();
 					break;
 				}
 
-				// if( ! getRecordHuman())
-					mode = ReRaceEnd();
+				ReRaceCleanup();
+				mode = ReRaceEventInit();
+				ReInfo->_reState = RE_STATE_PRE_RACE;
 
 				if(mode == RE_STATE_EXIT)
 				{
 					// dosssman
-					// if( getRecordHuman()) {
-					// 	printf( "### DEBUG: Episode ended from outside Torcs !\n" );
-						// In This case, we want to directly restart the race without killing the binary
-						// So we artificially resend it to RE_STATE_EVENT_INIT ?
-						// ReInfo->_reState = RE_STATE_EVENT_INIT; // This result in Wainting for request bug, apparently the snakeoil dont pick up
-						// break;
-					// }
+					// TODO: Dump player data
+					if( getRecordHuman()) {
+						printf( "### DEBUG: Episode ended from outside Torcs !\n" );
+
+					}
 
 					// Original
 					ReInfo->_reState=RE_STATE_EXIT;
 					// End Original
 				}
-				else if(mode == RE_STATE_EXIT && getTextOnly()) {
-					ReInfo->_reState=RE_STATE_EXIT;
-				}
 				else
 				{
 					if (mode & RM_NEXT_STEP) {
-						ReInfo->_reState = RE_STATE_POST_RACE;
+						// Dump play data use ReInfo params rquired probably
+						// dosssman
+						// TODO: Dump player data
+						// ReRaceCleanup();
+						// end dosssman
+						ReInfo->_reState = RE_STATE_PRE_RACE;
+						// ReInfo->_reState = RE_STATE_POST_RACE;
 					} else if (mode & RM_NEXT_RACE) {
 						ReInfo->_reState = RE_STATE_RACE_START;
 					}
@@ -505,7 +508,7 @@ void append_step_data() {
 	obs += SimpleParser::stringifym( 3.6 * car->_speed_y / 300.0); // Reging
 	obs += SimpleParser::stringifym( 3.6 * car->_speed_z / 300.0); // Reging
 	obs += SimpleParser::stringifym( wheelSpinVel, 4); // wheelspinvel
-	obs += SimpleParser::stringifym( car->_enginerpm / 1000); // Funny reg to match GymTorcs
+	obs += SimpleParser::stringifym( car->_enginerpm / 10000.); // Funny reg to match GymTorcs
 	obs += SimpleParser::stringifym( oppSensorOut, 36); // opp sensoirs
 
 	// TODO Free Pointers of observations vars
@@ -532,7 +535,10 @@ void append_step_data() {
 
 	// XXX: Compute the rwrd in case of dist only, must match reward in gym torcs
 	// Unnormalized angle to compute reard too -_-'
-	rews += SimpleParser::stringifym( 3.6 * car->_speed_x * cos( angle));
+	// rews += SimpleParser::stringifym( 3.6 * car->_speed_x * cos( angle));
+	rews += SimpleParser::stringifym( 3.6 * car->_speed_x * cos( angle)
+                                    - fabs(3.6 * car->_speed_x * sin( angle))
+                                    - 3.6 * car->_speed_x * fabs(dist_to_middle) * 0.3);
 	// printf( "Rew: %.3f\n",
 	//  	(3.6 * car->_speed_x * cos( angle)));
 
@@ -560,12 +566,12 @@ void append_episode_data() {
 	// Basically goto newline and the data appending at the timestep level does
 	// rest
 	// DEBUG Show expert score
-	// float ret_cum = 0.0;
-	// for( ushort i = 0; i <= getRecTimestepLimit(); i+=12) {
-	// 	ret_cum += rews[i];
-	// }
+	float ret_cum = 0.0;
+	for( ushort i = 0; i <= getRecTimestepLimit(); i+=12) {
+		ret_cum += rews[i];
+	}
 
-	// printf("\n#### DEBUG: Expert Score: %f\n", ret_cum);
+	printf("\n#### DEBUG: Expert Score: %f\n", ret_cum);
 
 	// printf( "### DEBUG: Reached file writing episode end\n");
 	open_save_files();
